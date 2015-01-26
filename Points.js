@@ -1,12 +1,11 @@
 /* Points - v0.1.1 - 2013-07-11
  * Another Pointer Events polyfill
-
  * http://rich-harris.github.io/Points
  * Copyright (c) 2013 Rich Harris; Released under the MIT License */
 
 
 
-(function () {
+var PointListener = function (targetElement) {
 
 	'use strict';
 
@@ -31,7 +30,7 @@
 		return;
 	}
 
-	pointerEventProperties = 'screenX screenY clientX clientY ctrlKey shiftKey altKey metaKey relatedTarget detail button buttons pointerId pointerType width height pressure tiltX tiltY isPrimary'.split( ' ' );
+	pointerEventProperties = 'screenX screenY clientX clientY pageX pageY ctrlKey shiftKey altKey metaKey relatedTarget detail button buttons pointerId pointerType width height pressure tiltX tiltY isPrimary'.split( ' ' );
 
 	// Can we create events using the MouseEvent constructor? If so, gravy
 	try {
@@ -61,6 +60,9 @@
 		var pointerEvent, i;
 
 		pointerEvent = createUIEvent( type, !noBubble );
+		//delete original pageX and Y so they can be set by Params
+		delete pointerEvent.pageX;
+		delete pointerEvent.pageY;
 
 		i = pointerEventProperties.length;
 		while ( i-- ) {
@@ -97,7 +99,7 @@
 
 			// pointerenter and pointerleave are special cases
 			if ( unprefixed === 'pointerover' || unprefixed === 'pointerout' ) {
-				window.addEventListener( prefixed, function ( originalEvent ) {
+				targetElement.addEventListener( prefixed, function ( originalEvent ) {
 					var unprefixedEvent = createEvent( unprefixed, originalEvent, originalEvent, false );
 					originalEvent.target.dispatchEvent( unprefixedEvent );
 
@@ -109,7 +111,7 @@
 			}
 
 			else {
-				window.addEventListener( prefixed, function ( originalEvent ) {
+				targetElement.addEventListener( prefixed, function ( originalEvent ) {
 					var unprefixedEvent = createEvent( unprefixed, originalEvent, originalEvent, false );
 					originalEvent.target.dispatchEvent( unprefixedEvent );
 				}, true );
@@ -162,6 +164,8 @@
 			screenY:       originalEvent.screenY,
 			clientX:       originalEvent.clientX,
 			clientY:       originalEvent.clientY,
+			pageX:         originalEvent.pageX,
+			pageY:         originalEvent.pageY,
 			ctrlKey:       originalEvent.ctrlKey,
 			shiftKey:      originalEvent.shiftKey,
 			altKey:        originalEvent.altKey,
@@ -192,7 +196,7 @@
 	//
 	// Surprisingly, the coordinates of the mouse event won't exactly correspond
 	// with the touchstart that originated them, so we need to be a bit fuzzy.
-	if ( window.ontouchstart !== undefined ) {
+	if ( targetElement.ontouchstart !== undefined ) {
 		mouseEventIsSimulated = function ( event ) {
 			var i = recentTouchStarts.length, threshold = 10, touch;
 			while ( i-- ) {
@@ -212,7 +216,7 @@
 
 	setUpMouseEvent = function ( type ) {
 		if ( type === 'over' || type === 'out' ) {
-			window.addEventListener( 'mouse' + type, function ( originalEvent ) {
+			targetElement.addEventListener( 'mouse' + type, function ( originalEvent ) {
 				var pointerEvent;
 
 				if ( mouseEventIsSimulated( originalEvent ) ) {
@@ -230,11 +234,11 @@
 		}
 
 		else {
-			window.addEventListener( 'mouse' + type, function ( originalEvent ) {
+			targetElement.addEventListener( 'mouse' + type, function ( originalEvent ) {
 				var pointerEvent;
 
 				if ( mouseEventIsSimulated( originalEvent ) ) {
-					return;
+					//return;
 				}
 
 				pointerEvent = createMouseProxyEvent( 'pointer' + type, originalEvent );
@@ -246,13 +250,10 @@
 	[ 'down', 'up', 'over', 'out', 'move' ].forEach( function ( eventType ) {
 		setUpMouseEvent( eventType );
 	});
-
-
-
-
+	
 
 	// Touch events:
-	if ( window.ontouchstart !== undefined ) {
+	if ( targetElement.ontouchstart !== undefined ) {
 		// Set up a registry of current touches
 		activePointers = {};
 		numActivePointers = 0;
@@ -269,6 +270,8 @@
 				screenY:       originalEvent.screenY,
 				clientX:       touch.clientX,
 				clientY:       touch.clientY,
+				pageX:         touch.pageX,
+				pageY:         touch.pageY,
 				ctrlKey:       originalEvent.ctrlKey,
 				shiftKey:      originalEvent.shiftKey,
 				altKey:        originalEvent.altKey,
@@ -294,7 +297,7 @@
 		};
 
 		// touchstart
-		window.addEventListener( 'touchstart', function ( event ) {
+		targetElement.addEventListener( 'touchstart', function ( event ) {
 			var touches, processTouch;
 
 			touches = event.changedTouches;
@@ -311,11 +314,12 @@
 				numActivePointers += 1;
 
 				pointerdownEvent = createTouchProxyEvent( 'pointerdown', event, touch );
-				pointeroverEvent = createTouchProxyEvent( 'pointerover', event, touch );
-				pointerenterEvent = createTouchProxyEvent( 'pointerenter', event, touch, true );
+				//only needed for spec conformance
+				//pointeroverEvent = createTouchProxyEvent( 'pointerover', event, touch );
+				//pointerenterEvent = createTouchProxyEvent( 'pointerenter', event, touch, true );
 
-				touch.target.dispatchEvent( pointeroverEvent );
-				touch.target.dispatchEvent( pointerenterEvent );
+				//touch.target.dispatchEvent( pointeroverEvent );
+				//touch.target.dispatchEvent( pointerenterEvent );
 				touch.target.dispatchEvent( pointerdownEvent );
 
 				// we need to keep track of recent touchstart events, so we can test
@@ -335,7 +339,7 @@
 		});
 
 		// touchmove
-		window.addEventListener( 'touchmove', function ( event ) {
+		targetElement.addEventListener( 'touchmove', function ( event ) {
 			var touches, processTouch;
 
 			touches = event.changedTouches;
@@ -395,7 +399,7 @@
 		});
 
 		// touchend
-		window.addEventListener( 'touchend', function ( event ) {
+		targetElement.addEventListener( 'touchend', function ( event ) {
 			var touches, processTouch;
 
 			touches = event.changedTouches;
@@ -406,15 +410,15 @@
 				actualTarget = document.elementFromPoint( touch.clientX, touch.clientY );
 
 				pointerupEvent = createTouchProxyEvent( 'pointerup', event, touch, false );
-				pointeroutEvent = createTouchProxyEvent( 'pointerout', event, touch, false );
-				pointerleaveEvent = createTouchProxyEvent( 'pointerleave', event, touch, true );
+				//pointeroutEvent = createTouchProxyEvent( 'pointerout', event, touch, false );
+				//pointerleaveEvent = createTouchProxyEvent( 'pointerleave', event, touch, true );
 
 				delete activePointers[ touch.identifier ];
 				numActivePointers -= 1;
 
 				actualTarget.dispatchEvent( pointerupEvent );
-				actualTarget.dispatchEvent( pointeroutEvent );
-				actualTarget.dispatchEvent( pointerleaveEvent );
+				//actualTarget.dispatchEvent( pointeroutEvent );
+				//actualTarget.dispatchEvent( pointerleaveEvent );
 			};
 
 			for ( i=0; i<touches.length; i+=1 ) {
@@ -423,7 +427,7 @@
 		});
 
 		// touchcancel
-		window.addEventListener( 'touchcancel', function ( event ) {
+		targetElement.addEventListener( 'touchcancel', function ( event ) {
 			var touches, processTouch;
 
 			touches = event.changedTouches;
@@ -432,12 +436,12 @@
 				var pointercancelEvent, pointeroutEvent, pointerleaveEvent;
 
 				pointercancelEvent = createTouchProxyEvent( 'pointercancel', event, touch );
-				pointeroutEvent = createTouchProxyEvent( 'pointerout', event, touch );
-				pointerleaveEvent = createTouchProxyEvent( 'pointerleave', event, touch );
+				//pointeroutEvent = createTouchProxyEvent( 'pointerout', event, touch );
+				//pointerleaveEvent = createTouchProxyEvent( 'pointerleave', event, touch );
 
 				touch.target.dispatchEvent( pointercancelEvent );
-				touch.target.dispatchEvent( pointeroutEvent );
-				touch.target.dispatchEvent( pointerleaveEvent );
+				//touch.target.dispatchEvent( pointeroutEvent );
+				//touch.target.dispatchEvent( pointerleaveEvent );
 
 				delete activePointers[ touch.identifier ];
 				numActivePointers -= 1;
@@ -457,4 +461,4 @@
 
 	// TODO stopPropagation?
 
-}());
+};
